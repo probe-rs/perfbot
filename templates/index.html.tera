@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<head>
+    <title>index</title>
+    <link href="./assets/favicon.ico" rel="icon" type="image/x-icon"/>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1" name="viewport"/>
+    <link href="data:image/x-icon;," rel="shortcut icon" type="image/x-icon"/>
+    <link href="/static/uPlot.min.css" rel="stylesheet"/>
+    <script src="/static/mithril.min.js"></script>
+</head>
+<body>
+    <script type="module">
+        import uPlot from "/static/uPlot.esm.js";
+        m.request({
+            method: "GET",
+            url: "/list",
+            params: {
+                id: 1
+            }
+        }).then(function (result) {
+            let data = [
+                result.logs.map(v => new Date(v.timestamp)),
+                result.logs.map(v => v.read_speed),
+                result.logs.map(v => v.write_speed)
+            ];
+            console.log(data);
+            const opts = {
+                width: 1000,
+                height: 600,
+                title: "Points",
+                tzDate: ts => uPlot.tzDate(new Date(ts * 1e3), "Etc/UTC"),
+                axes: [
+                    {}, {}
+                ],
+                series: [
+                    {
+                        label: "x"
+                    }, {
+                        stroke: "orange"
+                    }, {
+                        stroke: "red"
+                    }
+                ]
+            };
+            let u = new uPlot(opts, data, document.body);
+        });
+    </script>
+</body></body></html>

@@ -6,10 +6,10 @@ mod schema;
 use std::collections::BTreeMap;
 
 use chrono::NaiveDateTime;
-use diesel::{Insertable, QueryResult, Queryable, RunQueryDsl};
+use diesel::{ExpressionMethods, Insertable, QueryDsl, QueryResult, Queryable, RunQueryDsl};
 use openssl::hash::MessageDigest;
 use rocket::*;
-use rocket_contrib::{database, json::Json};
+use rocket_contrib::{database, json::Json, serve::StaticFiles, templates::Template};
 use schema::*;
 use serde::{Deserialize, Serialize};
 
@@ -18,12 +18,10 @@ const GH_REPO: &str = "probe-rs";
 const APP_ID: u64 = 93972;
 const INSTALLATION_ID: u64 = 13730372;
 
-#[derive(Serialize, Deserialize)]
-pub struct Filter {
-    pub probe: String,
-    pub chip: String,
-    pub os: String,
-    pub kind: String,
+#[get("/")]
+fn index() -> Template {
+    let context = BTreeMap::<String, String>::new();
+    Template::render("index", &context)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -32,13 +30,15 @@ struct ListResponse {
     logs: Vec<Log>,
 }
 
-#[get("/list?<_probe>&<_chip>&<_os>&<_kind>")]
+#[get("/list?<_probe>&<_chip>&<_os>&<_kind>&<_protocol>&<_protocol_speed>")]
 async fn list(
     db: Database,
     _probe: Option<String>,
     _chip: Option<String>,
     _os: Option<String>,
     _kind: Option<String>,
+    _protocol: Option<String>,
+    _protocol_speed: Option<String>,
 ) -> Json<ListResponse> {
     Json(
         db.run(move |c| {
@@ -60,8 +60,10 @@ async fn list(
 #[launch]
 fn rocket() -> rocket::Rocket {
     rocket::ignite()
-        .mount("/", routes![list, add])
+        .mount("/", routes![index, list, add])
         .attach(Database::fairing())
+        .attach(Template::fairing())
+        .mount("/static", StaticFiles::from("./static"))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -96,7 +98,7 @@ async fn add(
             diesel::insert_into(logs::table)
                 .values(&data.0)
                 .execute(c)
-                .and_then(|_| logs::table.first::<Log>(c))
+                .and_then(|_| logs::table.order(logs::id.desc()).first::<Log>(c))
                 .map_err(|e| {
                     Json(AddResponse {
                         error: Some(format!("{:?}", e)),
@@ -194,11 +196,14 @@ pub struct Log {
     pub probe: String,
     pub chip: String,
     pub os: String,
+    pub protocol: String,
+    pub protocol_speed: i32,
     pub commit_hash: String,
     #[serde(with = "timestamp")]
     pub timestamp: NaiveDateTime,
     pub kind: String,
-    pub speed: i32,
+    pub read_speed: i32,
+    pub write_speed: i32,
 }
 
 mod timestamp {
@@ -227,11 +232,14 @@ pub struct NewLog {
     pub probe: String,
     pub chip: String,
     pub os: String,
+    pub protocol: String,
+    pub protocol_speed: i32,
     pub commit_hash: String,
     #[serde(with = "timestamp")]
     pub timestamp: NaiveDateTime,
     pub kind: String,
-    pub speed: i32,
+    pub read_speed: i32,
+    pub write_speed: i32,
 }
 
 #[database("database")]
