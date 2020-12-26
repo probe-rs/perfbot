@@ -1,0 +1,5 @@
+[global]
+log_level = "normal"
+
+[global.databases]
+database = { url = "db.sqlite3" }
