@@ -19,26 +19,35 @@
             }
         }).then(function (result) {
             let data = [
-                result.logs.map(v => new Date(v.timestamp)),
+                result.logs.map(
+                (v, i) => i),
                 result.logs.map(v => v.read_speed),
                 result.logs.map(v => v.write_speed)
             ];
-            console.log(data);
             const opts = {
                 width: 1000,
                 height: 600,
                 title: "Points",
                 tzDate: ts => uPlot.tzDate(new Date(ts * 1e3), "Etc/UTC"),
                 axes: [
-                    {}, {}
+                    {
+                        values: (self, vals) => vals.map(i => result.logs[i].commit_hash),
+                        space: 100,
+                        rotate: -90,
+                        size: 100
+                    }, {}
                 ],
                 series: [
                     {
-                        label: "x"
+                        label: "commit",
+                        date: false,
+                        value: (self, i) => result.logs[i].commit_hash
                     }, {
-                        stroke: "orange"
+                        stroke: "orange",
+                        label: "read"
                     }, {
-                        stroke: "red"
+                        stroke: "red",
+                        label: "write"
                     }
                 ]
             };
