@@ -17,3 +17,6 @@ jwt = { version = "0.11.0", features = ["openssl"] }
 hmac = "*"
 sha2 = "*"
 openssl ="*"
+diesel_migrations = { version = "*", features = ["sqlite"] }
+migrations_macros = "*"
+dotenv = "*"

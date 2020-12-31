@@ -3,3 +3,7 @@ log_level = "normal"
 
 [global.databases]
 database = { url = "db.sqlite3" }
+
+[production]
+address = "127.0.0.1"
+port = 3333

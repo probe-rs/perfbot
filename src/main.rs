@@ -1,12 +1,20 @@
 #[macro_use]
 extern crate diesel;
+#[macro_use]
+extern crate diesel_migrations;
 
 mod schema;
 
 use std::collections::BTreeMap;
+use std::env;
 
 use chrono::NaiveDateTime;
-use diesel::{ExpressionMethods, Insertable, QueryDsl, QueryResult, Queryable, RunQueryDsl};
+use diesel::{
+    Connection, ExpressionMethods, Insertable, QueryDsl, QueryResult, Queryable, RunQueryDsl,
+    SqliteConnection,
+};
+use diesel_migrations::embed_migrations;
+use dotenv::dotenv;
 use openssl::hash::MessageDigest;
 use rocket::*;
 use rocket_contrib::{database, json::Json, serve::StaticFiles, templates::Template};
@@ -17,6 +25,8 @@ const GH_ORG: &str = "probe-rs";
 const GH_REPO: &str = "probe-rs";
 const APP_ID: u64 = 93972;
 const INSTALLATION_ID: u64 = 13730372;
+
+embed_migrations!();
 
 #[get("/")]
 fn index() -> Template {
@@ -88,8 +98,25 @@ async fn list(
     )
 }
 
+pub fn establish_connection() -> SqliteConnection {
+    dotenv().ok();
+
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    SqliteConnection::establish(&database_url)
+        .expect(&format!("Error connecting to {}", database_url))
+}
+
 #[launch]
 fn rocket() -> rocket::Rocket {
+    let connection = establish_connection();
+
+    // This will run the necessary migrations.
+    embedded_migrations::run(&connection).unwrap();
+
+    // By default the output is thrown out. If you want to redirect it to stdout, you
+    // should call embedded_migrations::run_with_output.
+    embedded_migrations::run_with_output(&connection, &mut std::io::stdout()).unwrap();
+
     rocket::ignite()
         .mount("/", routes![index, list, add])
         .attach(Database::fairing())
