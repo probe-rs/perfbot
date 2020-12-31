@@ -18,7 +18,7 @@ export function main() {
     m.mount(document.body, {
         view(vnode) {
             return m('.container', [
-                m('.row', plots.map((p, i) => m('.col-4.plot', {
+                m('.row', plots.map((p, i) => m('.col-6.plot', {
                     oninit(vnode) {
                         vnode.state.plot = undefined;
                         vnode.state.resize = function () { };
@@ -49,121 +49,6 @@ export function main() {
     })
 }
 
-function tooltipPlugin({ logs, absoluteMode, shiftX = 10, shiftY = 10 }) {
-    let tooltipLeftOffset = 0;
-    let tooltipTopOffset = 0;
-
-    const tooltip = document.createElement('div');
-    tooltip.className = 'u-tooltip';
-
-    let seriesIdx = null;
-    let dataIdx = null;
-
-    const fmtDate = uPlot.fmtDate('{M}/{D}/{YY} {h}:{mm}:{ss} {AA}');
-
-    let over;
-
-    let tooltipVisible = false;
-
-    function showTooltip() {
-        console.log('kek')
-        if (!tooltipVisible) {
-            tooltip.style.display = 'block';
-            over.style.cursor = 'pointer';
-            tooltipVisible = true;
-        }
-    }
-
-    function hideTooltip() {
-        if (tooltipVisible) {
-            tooltip.style.display = 'none';
-            over.style.cursor = null;
-            tooltipVisible = false;
-        }
-    }
-
-    function setTooltip(u) {
-        showTooltip();
-
-        let top = u.valToPos(u.data[seriesIdx][dataIdx], 'y');
-        let left = u.valToPos(u.data[0][dataIdx], 'x');
-
-        tooltip.style.top = (tooltipTopOffset + top + shiftX) + 'px';
-        tooltip.style.left = (tooltipLeftOffset + left + shiftY) + 'px';
-
-        let trailer = '';
-        if (absoluteMode) {
-            let pctSinceStart = (((u.data[seriesIdx][dataIdx] - u.data[seriesIdx][0]) / u.data[seriesIdx][0]) * 100).toFixed(2);
-            trailer = uPlot.fmtNum(u.data[seriesIdx][dataIdx]) + ' (' +
-                pctSinceStart + '% since start)';
-        } else {
-            trailer = uPlot.fmtNum(u.data[seriesIdx][dataIdx]) + '% since start';
-        }
-        tooltip.textContent = (
-            fmtDate(new Date(u.data[0][dataIdx] * 1e3)) + ' - ' +
-            logs[dataIdx][1].slice(0, 10) + '\n' + trailer
-        );
-    }
-
-    return {
-        hooks: {
-            ready: [
-                u => {
-                    console.log('kek')
-                    over = u.root.querySelector('.u-over');
-
-                    tooltipLeftOffset = parseFloat(over.style.left);
-                    tooltipTopOffset = parseFloat(over.style.top);
-                    u.root.querySelector('.u-wrap').appendChild(tooltip);
-
-                    let clientX;
-                    let clientY;
-
-                    over.addEventListener('mousedown', e => {
-                        clientX = e.clientX;
-                        clientY = e.clientY;
-                    });
-
-                    over.addEventListener('mouseup', e => {
-                        // clicked in-place
-                        if (e.clientX == clientX && e.clientY == clientY) {
-                            if (seriesIdx != null && dataIdx != null) {
-                                onclick(u, seriesIdx, dataIdx);
-                            }
-                        }
-                    });
-                }
-            ],
-            setCursor: [
-                u => {
-                    console.log('kek')
-                    let c = u.cursor;
-
-                    if (dataIdx != c.idx) {
-                        dataIdx = c.idx;
-
-                        if (seriesIdx != null)
-                            setTooltip(u);
-                    }
-                }
-            ],
-            setSeries: [
-                (u, sidx) => {
-                    console.log('kek')
-                    if (seriesIdx != sidx) {
-                        seriesIdx = sidx;
-
-                        if (sidx == null)
-                            hideTooltip();
-                        else if (dataIdx != null)
-                            setTooltip(u);
-                    }
-                }
-            ],
-        }
-    };
-}
-
 function createPlot(plot, dom) {
     return m.request({
         method: 'GET',
@@ -180,14 +65,16 @@ function createPlot(plot, dom) {
             width: dom.clientWidth,
             height: dom.clientWidth / 1.41,
             title: plot.params.probe + ': ' + plot.params.chip,
-            tzDate: ts => uPlot.tzDate(new Date(ts * 1e3), 'Etc/UTC'),
             axes: [
                 {
                     values: (self, vals) => vals.map(i => result.logs[i].commit_hash),
                     space: 100,
                     rotate: -90,
                     size: 100,
-                }, {}
+                }, {
+                    values: (self, vals) => vals.map(i => i),
+                    label: 'Transfer Speed [Bytes]'
+                }
             ],
             scales: {
                 x: {
@@ -201,41 +88,13 @@ function createPlot(plot, dom) {
                     value: (self, i) => result.logs[i].commit_hash
                 }, {
                     stroke: 'orange',
-                    label: 'read'
+                    label: 'read',
+                    value: (self, i) => i
                 }, {
                     stroke: 'red',
-                    label: 'write'
+                    label: 'write',
+                    value: (self, i) => i
                 }
-            ],
-            plugins: [
-                {
-                    hooks: {
-                        drawAxes: [
-                            u => {
-                                let { ctx } = u;
-                                let { left, top, width, height } = u.bbox;
-
-                                const interpolatedColorWithAlpha = '#fcb0f15f';
-
-                                ctx.strokeStyle = interpolatedColorWithAlpha;
-                                ctx.beginPath();
-
-                                let [i0, i1] = u.series[0].idxs;
-
-                                for (let j = i0; j <= i1; j++) {
-                                    let v = u.data[0][j];
-                                }
-
-                                ctx.closePath();
-                                ctx.stroke();
-                            },
-                        ]
-                    },
-                },
-                tooltipPlugin({
-                    logs: result.logs,
-                    absoluteMode: false,
-                }),
             ],
         };
         return new uPlot(opts, data, dom);
