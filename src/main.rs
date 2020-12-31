@@ -30,19 +30,50 @@ struct ListResponse {
     logs: Vec<Log>,
 }
 
-#[get("/list?<_probe>&<_chip>&<_os>&<_kind>&<_protocol>&<_protocol_speed>")]
+#[get("/list?<probe>&<chip>&<os>&<kind>&<protocol>&<protocol_speed>")]
 async fn list(
     db: Database,
-    _probe: Option<String>,
-    _chip: Option<String>,
-    _os: Option<String>,
-    _kind: Option<String>,
-    _protocol: Option<String>,
-    _protocol_speed: Option<String>,
+    probe: Option<String>,
+    chip: Option<String>,
+    os: Option<String>,
+    kind: Option<String>,
+    protocol: Option<String>,
+    protocol_speed: Option<i32>,
 ) -> Json<ListResponse> {
     Json(
         db.run(move |c| {
-            logs::table
+            let query = logs::table.into_boxed();
+            let query = if let Some(probe) = probe {
+                query.filter(logs::probe.eq(probe.to_ascii_lowercase()))
+            } else {
+                query
+            };
+            let query = if let Some(chip) = chip {
+                query.filter(logs::chip.eq(chip.to_ascii_lowercase()))
+            } else {
+                query
+            };
+            let query = if let Some(os) = os {
+                query.filter(logs::os.eq(os.to_ascii_lowercase()))
+            } else {
+                query
+            };
+            let query = if let Some(kind) = kind {
+                query.filter(logs::kind.eq(kind.to_ascii_lowercase()))
+            } else {
+                query
+            };
+            let query = if let Some(protocol) = protocol {
+                query.filter(logs::protocol.eq(protocol.to_ascii_lowercase()))
+            } else {
+                query
+            };
+            let query = if let Some(protocol_speed) = protocol_speed {
+                query.filter(logs::protocol_speed.eq(protocol_speed))
+            } else {
+                query
+            };
+            query
                 .load::<Log>(c)
                 .map(|l| ListResponse {
                     error: None,
@@ -93,10 +124,17 @@ async fn add(
     pr: Option<String>,
     data: Json<NewLog>,
 ) -> Result<Json<AddResponse>, Json<AddResponse>> {
+    let mut data = data.0;
+    data.probe = data.probe.to_ascii_lowercase();
+    data.chip = data.chip.to_ascii_lowercase();
+    data.os = data.os.to_ascii_lowercase();
+    data.kind = data.kind.to_ascii_lowercase();
+    data.protocol = data.protocol.to_ascii_lowercase();
+
     let log = db
         .run(move |c| {
             diesel::insert_into(logs::table)
-                .values(&data.0)
+                .values(&data)
                 .execute(c)
                 .and_then(|_| logs::table.order(logs::id.desc()).first::<Log>(c))
                 .map_err(|e| {

@@ -6,52 +6,21 @@
     <meta content="width=device-width, initial-scale=1" name="viewport"/>
     <link href="data:image/x-icon;," rel="shortcut icon" type="image/x-icon"/>
     <link href="/static/uPlot.min.css" rel="stylesheet"/>
+    <link href="/static/layout.css" rel="stylesheet"/>
     <script src="/static/mithril.min.js"></script>
+    <link
+        crossorigin="anonymous"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/css/bootstrap.min.css"
+        integrity="sha384-giJF6kkoqNQ00vy+HMDP7azOuL0xtbfIcaT9wjKHr8RbDVddVHyTfAAsrekwKmP1"
+        rel="stylesheet"/>
+    <script
+        crossorigin="anonymous"
+        integrity="sha384-ygbV9kiqUc6oa4msXn9868pTtWMgiQaeYH7/t7LECLbyPA2x65Kgf80OJFdroafW"
+        src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body>
     <script type="module">
-        import uPlot from "/static/uPlot.esm.js";
-        m.request({
-            method: "GET",
-            url: "/list",
-            params: {
-                id: 1
-            }
-        }).then(function (result) {
-            let data = [
-                result.logs.map(
-                (v, i) => i),
-                result.logs.map(v => v.read_speed),
-                result.logs.map(v => v.write_speed)
-            ];
-            const opts = {
-                width: 1000,
-                height: 600,
-                title: "Points",
-                tzDate: ts => uPlot.tzDate(new Date(ts * 1e3), "Etc/UTC"),
-                axes: [
-                    {
-                        values: (self, vals) => vals.map(i => result.logs[i].commit_hash),
-                        space: 100,
-                        rotate: -90,
-                        size: 100
-                    }, {}
-                ],
-                series: [
-                    {
-                        label: "commit",
-                        date: false,
-                        value: (self, i) => result.logs[i].commit_hash
-                    }, {
-                        stroke: "orange",
-                        label: "read"
-                    }, {
-                        stroke: "red",
-                        label: "write"
-                    }
-                ]
-            };
-            let u = new uPlot(opts, data, document.body);
-        });
+        import {main} from "/static/main.js";
+        main();
     </script>
 </body></body></html>
