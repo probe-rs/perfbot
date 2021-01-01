@@ -194,7 +194,7 @@ If you like, pick a PR and perform a benchmark. For help on performing a benchma
             &format!(r#"<h3>This is the probe-rs helper bot</h3>
 <p>
     You can run a new benchmark for a PR by checking out the state of that PR and running:
-    <code><pre>cargo run --release --example benchmark -- --chip <chipname> --address <0xstart_of_flash> -- size <size_in_hex></pre></code>
+    <code><pre>cargo run --release --example benchmark -- --chip <chipname> --address <0xstart_of_flash> -- size <size_in_hex> [--pr <PR>]</pre></code>
     This will automatically log read and write speed for RAM to https://perf.probe.rs. All data can be seen on this exact same page.
 </p>"#),
             &message.room,
@@ -231,12 +231,14 @@ fn migrate() {
     embedded_migrations::run_with_output(&connection, &mut std::io::stdout()).unwrap();
 }
 
-async fn rocket() -> Rocket {
+async fn rocket() -> Result<(), rocket::error::Error> {
     rocket::ignite()
         .mount("/", routes![index, list, add])
         .attach(Database::fairing())
         .attach(Template::fairing())
         .mount("/static", StaticFiles::from("./static"))
+        .launch()
+        .await
 }
 
 #[derive(Serialize, Deserialize)]
