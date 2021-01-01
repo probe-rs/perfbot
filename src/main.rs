@@ -12,6 +12,7 @@ use std::{
 };
 use std::{env, sync::Mutex};
 
+use askama::Template;
 use chrono::NaiveDateTime;
 use diesel::{
     debug_query, dsl::sql, sqlite::Sqlite, Connection, ExpressionMethods, Insertable, QueryDsl,
@@ -25,8 +26,10 @@ use matrix_bot_api::{
 };
 use octocrab::Octocrab;
 use openssl::hash::MessageDigest;
-use rocket::{self, get, post, routes, Rocket};
-use rocket_contrib::{database, json::Json, serve::StaticFiles, templates::Template};
+use rocket::{self, get, post, routes};
+use rocket_contrib::{
+    database, json::Json, serve::StaticFiles, templates::Template as RocketTemplate,
+};
 use schema::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -44,9 +47,9 @@ lazy_static::lazy_static! {
 embed_migrations!();
 
 #[get("/")]
-fn index() -> Template {
+fn index() -> RocketTemplate {
     let context = BTreeMap::<String, String>::new();
-    Template::render("index", &context)
+    RocketTemplate::render("index", &context)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -121,7 +124,22 @@ pub fn establish_connection() -> SqliteConnection {
         .expect(&format!("Error connecting to {}", database_url))
 }
 
-pub fn matrix_connection() {
+struct Pr {
+    number: u64,
+    benchmarks: usize,
+}
+
+#[derive(Template)]
+#[template(path = "commands/perf.html")]
+struct PerfTemplate {
+    prs: Vec<Pr>,
+}
+
+#[derive(Template)]
+#[template(path = "commands/help.html")]
+struct HelpTemplate {}
+
+pub fn matrix_bot() {
     let mut handler = StatelessHandler::new();
 
     handler.register_handle("perf", |bot, message, tail| {
@@ -140,48 +158,24 @@ pub fn matrix_connection() {
         // 2. Get perf benchmarks for last commit of open PRs.
         let prs = prs
             .iter()
-            .map(|(pr, commits)| {
-                println!(
-                    "{}",
-                    debug_query::<Sqlite, _>(
-                        &logs::table.filter(
-                            sql(&format!("'{}'", commits.last().unwrap()))
-                                .like(logs::commit_hash.concat("%")),
-                        )
+            .map(|(pr, commits)| Pr {
+                number: *pr,
+                benchmarks: logs::table
+                    .filter(
+                        sql(&format!("'{}'", commits.last().unwrap()))
+                            .like(logs::commit_hash.concat("%")),
                     )
-                );
-                (
-                    *pr,
-                    logs::table
-                        .filter(
-                            sql(&format!("'{}'", commits.last().unwrap()))
-                                .like(logs::commit_hash.concat("%")),
-                        )
-                        .load::<Log>(&establish_connection())
-                        .unwrap()
-                        .len(),
-                )
+                    .load::<Log>(&establish_connection())
+                    .unwrap()
+                    .len(),
             })
-            .collect::<HashMap<u64, usize>>();
+            .collect::<Vec<Pr>>();
         // 3. Count number of benchmarks per PR.
         // 4. Print to commandline.
 
-        let mut pr_list = String::new();
-
-        for (pr, commits) in prs {
-            pr_list.push_str(&format!("<li>#{}: {:?}</li>", pr, commits));
-        }
-
         bot.send_html_message(
             &"",
-            &format!(
-                r#"Here is a list of all open PRs and their respective number of logged benchmarks:
-If you like, pick a PR and perform a benchmark. For help on performing a benchmark, use !help.
-<ul style="list-style:none">
-    {}
-</ul>"#,
-                pr_list
-            ),
+            &PerfTemplate { prs }.render().unwrap(),
             &message.room,
             MessageType::TextMessage,
         );
@@ -191,20 +185,15 @@ If you like, pick a PR and perform a benchmark. For help on performing a benchma
     handler.register_handle("help", |bot, message, tail| {
         bot.send_html_message(
             "",
-            &format!(r#"<h3>This is the probe-rs helper bot</h3>
-<p>
-    You can run a new benchmark for a PR by checking out the state of that PR and running:
-    <code><pre>cargo run --release --example benchmark -- --chip <chipname> --address <0xstart_of_flash> -- size <size_in_hex> [--pr <PR>]</pre></code>
-    This will automatically log read and write speed for RAM to https://perf.probe.rs. All data can be seen on this exact same page.
-</p>"#),
+            &HelpTemplate {}.render().unwrap(),
             &message.room,
             MessageType::TextMessage,
         );
         HandleResult::StopHandling
     });
 
-    let mut bot = MatrixBot::new(handler);
-    bot.run("perfbot", "k@Jr1ZrlhLKi", "https://matrix.org");
+    let bot = MatrixBot::new(handler);
+    std::thread::spawn(|| bot.run("perfbot", "k@Jr1ZrlhLKi", "https://matrix.org"));
 }
 
 fn main() {
@@ -216,7 +205,7 @@ fn main() {
         *handle = Some(rt.handle().clone());
     }
     rt.spawn(rocket());
-    std::thread::spawn(|| matrix_connection());
+    let bot = matrix_bot();
     rt.block_on(std::future::pending::<()>());
 }
 
@@ -235,7 +224,7 @@ async fn rocket() -> Result<(), rocket::error::Error> {
     rocket::ignite()
         .mount("/", routes![index, list, add])
         .attach(Database::fairing())
-        .attach(Template::fairing())
+        .attach(RocketTemplate::fairing())
         .mount("/static", StaticFiles::from("./static"))
         .launch()
         .await

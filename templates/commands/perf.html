@@ -1,0 +1,7 @@
+Here is a list of all open PRs and their respective number of logged benchmarks:
+If you like, pick a PR and perform a benchmark. For help on performing a benchmark, use !help.
+<ul style="list-style:none">
+    {% for pr in prs %}
+    <li>#{{ pr.number }}: {{ pr.benchmarks }}</li>
+    {% endfor %}
+</ul>
