@@ -12,7 +12,7 @@ rocket_contrib = { git = "https://github.com/SergioBenitez/Rocket", default-feat
 diesel = { version = "1.4.5", features = ["sqlite", "chrono"] }
 libsqlite3-sys = { version = ">=0.8.0, <0.21.0", features = ["bundled"] }
 chrono = { version = "0.4.19" }
-octocrab = { version = "0.8.2" }
+octocrab = { version = "0.8.2", path = "../octocrab" }
 jwt = { version = "0.11.0", features = ["openssl"] }
 hmac = "*"
 sha2 = "*"
@@ -20,3 +20,7 @@ openssl ="*"
 diesel_migrations = { version = "*", features = ["sqlite"] }
 migrations_macros = "*"
 dotenv = "*"
+matrix_bot_api = "*"
+tokio = { version = "0.2.24", features = ["full"] }
+futures = "0.3.8"
+lazy_static = "*"

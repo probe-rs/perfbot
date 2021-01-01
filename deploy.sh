@@ -1,4 +1,5 @@
-ssh nebuchadnezar 'git clone https://github.com/probe-rs/perfbot'
-ssh nebuchadnezar 'cd perfbot && git pull'
+ssh nebuchadnezar 'cd /home && git clone https://github.com/probe-rs/perfbot'
+ssh nebuchadnezar 'cd /home/perfbot && git pull'
 ssh nebuchadnezar 'killall perfbot'
-ssh nebuchadnezar 'source $HOME/.cargo/env && cd perfbot && nohup cargo run --release > /dev/null 2>&1 &'
+# ssh nebuchadnezar 'source $HOME/.cargo/env && cd /home/perfbot && nohup cargo run --release > /dev/null 2>&1 &'
+ssh nebuchadnezar 'source $HOME/.cargo/env && cd /home/perfbot && cargo run --release'

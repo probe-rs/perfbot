@@ -1,3 +1,4 @@
+#![recursion_limit = "512"]
 #[macro_use]
 extern crate diesel;
 #[macro_use]
@@ -5,26 +6,40 @@ extern crate diesel_migrations;
 
 mod schema;
 
-use std::collections::BTreeMap;
-use std::env;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
+use std::{env, sync::Mutex};
 
 use chrono::NaiveDateTime;
 use diesel::{
-    Connection, ExpressionMethods, Insertable, QueryDsl, QueryResult, Queryable, RunQueryDsl,
-    SqliteConnection,
+    debug_query, dsl::sql, sqlite::Sqlite, Connection, ExpressionMethods, Insertable, QueryDsl,
+    QueryResult, Queryable, RunQueryDsl, SqliteConnection, TextExpressionMethods,
 };
 use diesel_migrations::embed_migrations;
 use dotenv::dotenv;
+use matrix_bot_api::{
+    handlers::{HandleResult, StatelessHandler},
+    MatrixBot, MessageType,
+};
+use octocrab::Octocrab;
 use openssl::hash::MessageDigest;
-use rocket::*;
+use rocket::{self, get, post, routes, Rocket};
 use rocket_contrib::{database, json::Json, serve::StaticFiles, templates::Template};
 use schema::*;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use tokio::runtime::{Handle, Runtime};
 
 const GH_ORG: &str = "probe-rs";
 const GH_REPO: &str = "probe-rs";
 const APP_ID: u64 = 93972;
 const INSTALLATION_ID: u64 = 13730372;
+
+lazy_static::lazy_static! {
+    static ref RUNTIME: Mutex<Option<Handle>> = Mutex::new(None);
+}
 
 embed_migrations!();
 
@@ -106,8 +121,106 @@ pub fn establish_connection() -> SqliteConnection {
         .expect(&format!("Error connecting to {}", database_url))
 }
 
-#[launch]
-fn rocket() -> rocket::Rocket {
+pub fn matrix_connection() {
+    let mut handler = StatelessHandler::new();
+
+    handler.register_handle("perf", |bot, message, tail| {
+        // TODO:
+        //
+        // 1. Get open PRs.
+        let mut handle = { RUNTIME.lock().unwrap().clone() };
+        let prs = futures::executor::block_on(
+            handle
+                .as_mut()
+                .unwrap()
+                .spawn(async { get_pr_commits().await }),
+        )
+        .unwrap()
+        .unwrap();
+        // 2. Get perf benchmarks for last commit of open PRs.
+        let prs = prs
+            .iter()
+            .map(|(pr, commits)| {
+                println!(
+                    "{}",
+                    debug_query::<Sqlite, _>(
+                        &logs::table.filter(
+                            sql(&format!("'{}'", commits.last().unwrap()))
+                                .like(logs::commit_hash.concat("%")),
+                        )
+                    )
+                );
+                (
+                    *pr,
+                    logs::table
+                        .filter(
+                            sql(&format!("'{}'", commits.last().unwrap()))
+                                .like(logs::commit_hash.concat("%")),
+                        )
+                        .load::<Log>(&establish_connection())
+                        .unwrap()
+                        .len(),
+                )
+            })
+            .collect::<HashMap<u64, usize>>();
+        // 3. Count number of benchmarks per PR.
+        // 4. Print to commandline.
+
+        let mut pr_list = String::new();
+
+        for (pr, commits) in prs {
+            pr_list.push_str(&format!("<li>#{}: {:?}</li>", pr, commits));
+        }
+
+        bot.send_html_message(
+            &"",
+            &format!(
+                r#"Here is a list of all open PRs and their respective number of logged benchmarks:
+If you like, pick a PR and perform a benchmark. For help on performing a benchmark, use !help.
+<ul style="list-style:none">
+    {}
+</ul>"#,
+                pr_list
+            ),
+            &message.room,
+            MessageType::TextMessage,
+        );
+        HandleResult::StopHandling
+    });
+
+    handler.register_handle("help", |bot, message, tail| {
+        bot.send_html_message(
+            "",
+            &format!(r#"<h3>This is the probe-rs helper bot</h3>
+<p>
+    You can run a new benchmark for a PR by checking out the state of that PR and running:
+    <code><pre>cargo run --release --example benchmark -- --chip <chipname> --address <0xstart_of_flash> -- size <size_in_hex></pre></code>
+    This will automatically log read and write speed for RAM to https://perf.probe.rs. All data can be seen on this exact same page.
+</p>"#),
+            &message.room,
+            MessageType::TextMessage,
+        );
+        HandleResult::StopHandling
+    });
+
+    let mut bot = MatrixBot::new(handler);
+    bot.run("perfbot", "k@Jr1ZrlhLKi", "https://matrix.org");
+}
+
+fn main() {
+    migrate();
+
+    let mut rt = Runtime::new().unwrap();
+    {
+        let mut handle = RUNTIME.lock().unwrap();
+        *handle = Some(rt.handle().clone());
+    }
+    rt.spawn(rocket());
+    std::thread::spawn(|| matrix_connection());
+    rt.block_on(std::future::pending::<()>());
+}
+
+fn migrate() {
     let connection = establish_connection();
 
     // This will run the necessary migrations.
@@ -116,7 +229,9 @@ fn rocket() -> rocket::Rocket {
     // By default the output is thrown out. If you want to redirect it to stdout, you
     // should call embedded_migrations::run_with_output.
     embedded_migrations::run_with_output(&connection, &mut std::io::stdout()).unwrap();
+}
 
+async fn rocket() -> Rocket {
     rocket::ignite()
         .mount("/", routes![index, list, add])
         .attach(Database::fairing())
@@ -196,24 +311,10 @@ struct Claims {
     iss: u64,
 }
 
-async fn create_gh_comment(
-    pr: u64,
-    log: &Log,
-) -> octocrab::Result<octocrab::models::issues::Comment> {
-    let body = format!(
-        r#"
-**Running performance benchmakrs:**
-Commit: {}
-Probe: {}
-Chip: {}
-    "#,
-        log.commit_hash, log.probe, log.chip
-    );
-
+pub async fn renew_token() -> octocrab::Result<Arc<Octocrab>> {
     let key = include_bytes!("../probe-rs-perfbot.2020-12-25.private-key.pem");
 
     use jwt::{algorithm::openssl::PKeyWithDigest, SignWithKey};
-    use serde_json::Value;
     use std::time::{SystemTime, UNIX_EPOCH};
     let key = PKeyWithDigest {
         key: openssl::pkey::PKey::private_key_from_pem(key).unwrap(),
@@ -231,28 +332,74 @@ Chip: {}
     claims.insert("exp", since_the_epoch + 10 * 60);
     claims.insert("iss", APP_ID);
 
-    println!("{:?}", claims);
-
     let token_str = claims.sign_with_key(&key).unwrap();
-    println!("{}", token_str);
 
-    octocrab::initialise(octocrab::Octocrab::builder().personal_token(token_str.into())).unwrap();
+    octocrab::initialise(octocrab::Octocrab::builder().personal_token(token_str.into()))?;
 
     let response: Value = octocrab::instance()
         .post(
             format!("/app/installations/{}/access_tokens", INSTALLATION_ID),
             None::<&()>,
         )
-        .await
-        .unwrap();
+        .await?;
     let token = response["token"].as_str().unwrap();
 
-    octocrab::initialise(octocrab::Octocrab::builder().personal_token(token.into())).unwrap();
+    octocrab::initialise(octocrab::Octocrab::builder().personal_token(token.into()))
+}
+
+async fn create_gh_comment(
+    pr: u64,
+    log: &Log,
+) -> octocrab::Result<octocrab::models::issues::Comment> {
+    let body = format!(
+        r#"
+**Ran performance benchmarks**
+Commit: {}
+Probe: {}
+Chip: {}
+Kind: {}
+Read: {}
+Write: {}
+    "#,
+        log.commit_hash, log.probe, log.chip, log.kind, log.read_speed, log.write_speed
+    );
+
+    renew_token().await?;
 
     octocrab::instance()
         .issues(GH_ORG, GH_REPO)
         .create_comment(pr, body)
         .await
+}
+
+async fn get_pr_commits() -> octocrab::Result<HashMap<u64, Vec<String>>> {
+    renew_token().await?;
+
+    let prs = octocrab::instance()
+        .pulls(GH_ORG, GH_REPO)
+        .list()
+        .state(octocrab::params::State::Open)
+        .send()
+        .await?;
+
+    let mut result = HashMap::<u64, Vec<String>>::new();
+
+    for pr in prs {
+        let commits: Value = octocrab::instance()
+            .get::<_, _, Value>(pr.commits_url.clone(), None)
+            .await?;
+        result.insert(
+            pr.number,
+            commits
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|c| c.get("sha").unwrap().as_str().unwrap().to_string())
+                .collect(),
+        );
+    }
+
+    Ok(result)
 }
 
 #[derive(Serialize, Deserialize, Queryable)]
