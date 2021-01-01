@@ -1668,6 +1668,7 @@ checksum = "8d3b63360ec3cb337817c2dbd47ab4a0f170d285d8e5a2064600f3def1402397"
 [[package]]
 name = "octocrab"
 version = "0.8.2"
+source = "git+https://github.com/Yatekii/octocrab#18be0fa3bb4f8b86d8a7c00481e81b518c1217a9"
 dependencies = [
  "arc-swap",
  "async-trait",
