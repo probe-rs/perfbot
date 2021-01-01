@@ -23,4 +23,4 @@
         import {main} from "/static/main.js";
         main();
     </script>
-</body></body></html>
+</body></html>
