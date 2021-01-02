@@ -16,8 +16,9 @@ use std::{env, sync::Mutex};
 use askama::Template;
 use chrono::NaiveDateTime;
 use diesel::{
-    debug_query, dsl::sql, sqlite::Sqlite, Connection, ExpressionMethods, Insertable, QueryDsl,
-    QueryResult, Queryable, RunQueryDsl, SqliteConnection, TextExpressionMethods,
+    debug_query, dsl::sql, sql_types::Text, sqlite::Sqlite, Connection, ExpressionMethods,
+    Insertable, QueryDsl, QueryResult, Queryable, RunQueryDsl, SqliteConnection,
+    TextExpressionMethods,
 };
 use diesel_migrations::embed_migrations;
 use dotenv::dotenv;
@@ -163,7 +164,7 @@ pub fn matrix_bot() {
                 number: *pr,
                 benchmarks: logs::table
                     .filter(
-                        sql(&format!("'{}'", commits.last().unwrap()))
+                        sql::<Text>(&format!("'{}'", commits.last().unwrap()))
                             .like(logs::commit_hash.concat("%")),
                     )
                     .load::<Log>(&establish_connection())
