@@ -4,7 +4,6 @@ mod templates;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use chrono::Duration;
 use matrix_sdk::{
     self,
     events::{
@@ -42,9 +41,9 @@ impl EventEmitter for CommandBot {
             };
 
             if msg_body.starts_with("!help") {
-                handlers::help(self.client.clone(), room).await;
+                handlers::help(self.client.clone(), room).await.unwrap();
             } else if msg_body.starts_with("!perf") {
-                handlers::perf(self.client.clone(), room).await;
+                handlers::perf(self.client.clone(), room).await.unwrap();
             }
         }
     }

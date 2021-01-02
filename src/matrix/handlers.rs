@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use askama::Template;
-use diesel::{dsl::sql, sql_types::Text, Connection, QueryDsl, RunQueryDsl, TextExpressionMethods};
+use diesel::{dsl::sql, sql_types::Text, QueryDsl, RunQueryDsl, TextExpressionMethods};
 use matrix_sdk::{
     api::r0::message::send_message_event::Response,
     events::{room::message::MessageEventContent, AnyMessageEventContent},

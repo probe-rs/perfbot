@@ -1,27 +1,15 @@
-#![recursion_limit = "512"]
-#[macro_use]
-extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
-
 pub mod db;
 mod matrix;
 
+use std::sync::Mutex;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
-use std::{env, sync::Mutex};
 
 use askama::Template;
-use chrono::NaiveDateTime;
-use diesel::{
-    debug_query, dsl::sql, sql_types::Text, sqlite::Sqlite, Connection, ExpressionMethods,
-    Insertable, QueryDsl, QueryResult, Queryable, RunQueryDsl, SqliteConnection,
-    TextExpressionMethods,
-};
+use diesel::{ExpressionMethods, QueryDsl, QueryResult, RunQueryDsl};
 use diesel_migrations::embed_migrations;
-use dotenv::dotenv;
 use octocrab::Octocrab;
 use openssl::hash::MessageDigest;
 use perfbot_common::{schema::logs, Log, NewLog};
@@ -31,7 +19,7 @@ use rocket_contrib::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tokio::runtime::{Handle, Runtime};
+use tokio::runtime::Runtime;
 
 const GH_ORG: &str = "probe-rs";
 const GH_REPO: &str = "probe-rs";
