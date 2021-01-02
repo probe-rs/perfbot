@@ -98,6 +98,90 @@ async fn list(
     )
 }
 
+#[derive(Serialize, Deserialize)]
+struct ChipsResponse {
+    error: Option<String>,
+    chips: Vec<String>,
+}
+
+#[get("/chips")]
+async fn chips(db: Database) -> Json<ChipsResponse> {
+    Json(
+        db.run(move |c| {
+            let chips = logs::table
+                .group_by(logs::chip)
+                .select(logs::chip)
+                .load(c)
+                .map(|l| ChipsResponse {
+                    error: None,
+                    chips: l,
+                })
+                .unwrap_or_else(|e| ChipsResponse {
+                    error: Some(format!("{:?}", e)),
+                    chips: vec![],
+                });
+            chips
+        })
+        .await,
+    )
+}
+
+#[derive(Serialize, Deserialize)]
+struct ProbesResponse {
+    error: Option<String>,
+    probes: Vec<String>,
+}
+
+#[get("/probes")]
+async fn probes(db: Database) -> Json<ProbesResponse> {
+    Json(
+        db.run(move |c| {
+            let probes = logs::table
+                .group_by(logs::probe)
+                .select(logs::probe)
+                .load(c)
+                .map(|l| ProbesResponse {
+                    error: None,
+                    probes: l,
+                })
+                .unwrap_or_else(|e| ProbesResponse {
+                    error: Some(format!("{:?}", e)),
+                    probes: vec![],
+                });
+            probes
+        })
+        .await,
+    )
+}
+
+#[derive(Serialize, Deserialize)]
+struct SetupsResponse {
+    error: Option<String>,
+    setups: Vec<(String, String)>,
+}
+
+#[get("/setups")]
+async fn setups(db: Database) -> Json<SetupsResponse> {
+    Json(
+        db.run(move |c| {
+            let setups = logs::table
+                .group_by((logs::probe, logs::chip))
+                .select((logs::probe, logs::chip))
+                .load(c)
+                .map(|l| SetupsResponse {
+                    error: None,
+                    setups: l,
+                })
+                .unwrap_or_else(|e| SetupsResponse {
+                    error: Some(format!("{:?}", e)),
+                    setups: vec![],
+                });
+            setups
+        })
+        .await,
+    )
+}
+
 struct Pr {
     number: u64,
     benchmarks: usize,
@@ -153,7 +237,7 @@ fn migrate() {
 
 async fn rocket(handle: Arc<Mutex<Option<Shutdown>>>) -> Result<(), rocket::error::Error> {
     let rocket = rocket::ignite()
-        .mount("/", routes![index, list, add])
+        .mount("/", routes![index, list, add, chips, probes, setups])
         .attach(Database::fairing())
         .attach(RocketTemplate::fairing())
         .mount("/static", StaticFiles::from("./static"));

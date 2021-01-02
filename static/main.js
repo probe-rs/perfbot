@@ -1,53 +1,55 @@
 import uPlot from '/static/uPlot.esm.js';
 
 export function main() {
-    let plots = [{
-        params: {
-            probe: 'CMSIS-DAP',
-            chip: 'nRF51822',
-        }
-    },
-    {
-        params: {
-            probe: 'J-Link',
-            chip: 'nRF52840',
-        }
-    }
-    ];
+    let plots = [];
 
-    m.mount(document.body, {
-        view(vnode) {
-            return m('.container', [
-                m('row', m('.col', m('h2.text-center.m-4', 'probe-rs performance & regression tracking'))),
-                m('.row', plots.map((p, i) => m('.col-6.plot', {
-                    oninit(vnode) {
-                        vnode.state.plot = undefined;
-                        vnode.state.resize = function () { };
-                    },
-                    oncreate(vnode) {
-                        createPlot(plots[i], vnode.dom).then(plot => {
-                            vnode.state.plot = plot;
+    m.request({
+        method: 'GET',
+        url: '/setups',
+    }).then(result => {
+        result.setups.forEach(([probe, chip]) =>
+            plots.push({
+                params: {
+                    probe,
+                    chip,
+                }
+            })
+        )
 
-                            vnode.state.resize = function () {
-                                if (plot) {
-                                    plot.setSize({
-                                        width: vnode.dom.clientWidth,
-                                        height: vnode.dom.clientWidth / 1.41,
-                                    })
+        m.mount(document.body, {
+            view(vnode) {
+                return m('.container', [
+                    m('row', m('.col', m('h2.text-center.m-4', 'probe-rs performance & regression tracking'))),
+                    m('.row', plots.map((p, i) => m('.col-6.plot.mt-5', {
+                        oninit(vnode) {
+                            vnode.state.plot = undefined;
+                            vnode.state.resize = function () { };
+                        },
+                        oncreate(vnode) {
+                            createPlot(plots[i], vnode.dom).then(plot => {
+                                vnode.state.plot = plot;
+
+                                vnode.state.resize = function () {
+                                    if (plot) {
+                                        plot.setSize({
+                                            width: vnode.dom.clientWidth,
+                                            height: vnode.dom.clientWidth / 1.41,
+                                        })
+                                    }
                                 }
-                            }
 
-                            window.addEventListener('resize', vnode.state.resize)
-                        });
-                    },
-                    onremove(vnode) {
-                        window.removeEventListener('resize', vnode.state.resize)
-                    }
-                }))
-                )
-            ])
-        }
-    })
+                                window.addEventListener('resize', vnode.state.resize)
+                            });
+                        },
+                        onremove(vnode) {
+                            window.removeEventListener('resize', vnode.state.resize)
+                        }
+                    }))
+                    )
+                ])
+            }
+        })
+    });
 }
 
 /// https://stackoverflow.com/questions/15900485/correct-way-to-convert-size-in-bytes-to-kb-mb-gb-in-javascript

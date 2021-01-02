@@ -85,21 +85,18 @@ pub async fn login_and_sync(
     // that sync token to `sync`
     let settings = SyncSettings::default()
         .token(client.sync_token().await.unwrap())
-        .timeout(std::time::Duration::from_millis(1000));
+        .timeout(std::time::Duration::from_millis(500));
     // this keeps state from the server streaming in to CommandBot via the EventEmitter trait
     // client.sync(settings).await;
     client
         .sync_with_callback(settings, |_| async {
-            println!("*KEKKE");
             if *shutdown.lock().unwrap() {
-                println!("BREAKBREAK");
                 LoopCtrl::Break
             } else {
                 LoopCtrl::Continue
             }
         })
         .await;
-    println!("DUNDID");
 
     Ok(())
 }
