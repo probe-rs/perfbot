@@ -3,15 +3,16 @@ export function main() {
 
     m.request({
         method: 'GET',
-        url: '/setups',
+        url: '/probes',
     }).then(result => {
-        result.setups.forEach(([probe, chip]) =>
-            plots.push({
-                params: {
-                    probe,
-                    chip,
-                }
-            })
+        result.probes.forEach(probe =>
+            [100, 1000, 10000, 50000].forEach(speed =>
+                plots.push({
+                    params: {
+                        probe,
+                        protocol_speed: speed,
+                    }
+                }))
         )
 
         m.mount(document.body, {
@@ -60,6 +61,18 @@ function formatBytes(bytes, decimals = 2) {
     const k = 1024;
     const dm = decimals < 0 ? 0 : decimals;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+function formatHz(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Hz';
+
+    const k = 1000;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Hz', 'KHz', 'MHz', 'GHz', 'THz'];
 
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
@@ -133,7 +146,7 @@ function createPlot(plot, dom) {
             },
             options: {
                 title: {
-                    text: plot.params.probe + ': ' + plot.params.chip,
+                    text: plot.params.probe + ': ' + formatHz(plot.params.protocol_speed * 1e3),
                     display: true,
                 },
                 legend: {
@@ -144,7 +157,6 @@ function createPlot(plot, dom) {
                 scales: {
                     yAxes: [{
                         ticks: {
-                            // Include a dollar sign in the ticks
                             callback: (value, index, values) => formatBytes(value)
                         }
                     }, {
@@ -153,7 +165,7 @@ function createPlot(plot, dom) {
                         position: 'right',
                         id: 'y-axis-2',
                         gridLines: {
-                            drawOnChartArea: false, // only want the grid lines for one axis to show up
+                            drawOnChartArea: false,
                         },
                     }]
                 },

@@ -13,3 +13,9 @@ scripts/deploy.sh
 ```
 
 During development, a `cargo run` suffices.
+
+## Benchmarks
+
+### RAM
+
+When doing a RAM benchmark, please use a block size of 0x1000 Bytes and a Protocol speed of 1, 10 or 50MHz
