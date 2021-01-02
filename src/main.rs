@@ -4,6 +4,7 @@ extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
 
+mod matrix;
 mod schema;
 
 use std::{
