@@ -2,7 +2,7 @@
 
 echo "Starting up webserver"
 
-cd data
+ls /app/data
 
 RUST_BACKTRACE=1 \
-../webpage
+/app/perfbot

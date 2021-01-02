@@ -1,3 +1,2 @@
-/target
-probe-rs-perfbot.2020-12-25.private-key.pem
-db.sqlite3
+target
+data

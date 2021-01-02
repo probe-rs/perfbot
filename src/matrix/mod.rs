@@ -18,11 +18,17 @@ struct CommandBot {
     /// This clone of the `Client` will send requests to the server,
     /// while the other keeps us in sync with the server using `sync`.
     client: Client,
+    gh_key: Vec<u8>,
+    database_path: String,
 }
 
 impl CommandBot {
-    pub fn new(client: Client) -> Self {
-        Self { client }
+    pub fn new(client: Client, gh_key: Vec<u8>, database_path: String) -> Self {
+        Self {
+            client,
+            gh_key,
+            database_path,
+        }
     }
 }
 
@@ -43,7 +49,9 @@ impl EventEmitter for CommandBot {
             if msg_body.starts_with("!help") {
                 handlers::help(self.client.clone(), room).await.unwrap();
             } else if msg_body.starts_with("!perf") {
-                handlers::perf(self.client.clone(), room).await.unwrap();
+                handlers::perf(&self.gh_key, &self.database_path, self.client.clone(), room)
+                    .await
+                    .unwrap();
             }
         }
     }
@@ -53,13 +61,12 @@ pub async fn login_and_sync(
     homeserver_url: &str,
     username: &str,
     password: &str,
+    gh_key: Vec<u8>,
+    database_path: String,
+    json_store: &str,
     shutdown: Arc<Mutex<bool>>,
 ) -> Result<(), matrix_sdk::Error> {
-    // the location for `JsonStore` to save files to
-    let mut home = dirs::home_dir().expect("no home directory found");
-    home.push("perfbot");
-
-    let store = JsonStore::open(&home)?;
+    let store = JsonStore::open(json_store)?;
     let client_config = ClientConfig::new().state_store(Box::new(store));
 
     let homeserver_url = Url::parse(&homeserver_url).expect("Couldn't parse the homeserver URL");
@@ -78,7 +85,11 @@ pub async fn login_and_sync(
     // add our CommandBot to be notified of incoming messages, we do this after the initial
     // sync to avoid responding to messages before the bot was running.
     client
-        .add_event_emitter(Box::new(CommandBot::new(client.clone())))
+        .add_event_emitter(Box::new(CommandBot::new(
+            client.clone(),
+            gh_key,
+            database_path,
+        )))
         .await;
 
     // since we called `sync_once` before we entered our sync loop we must pass

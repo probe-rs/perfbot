@@ -6,5 +6,5 @@ fi
 
 docker \
 build \
--t probe-rs-webpage \
+-t perfbot \
 $1

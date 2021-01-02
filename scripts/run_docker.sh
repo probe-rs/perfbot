@@ -1,5 +1,6 @@
 docker run \
 --rm \
 -ti \
--p 1337:3030 \
-probe-rs-webpage:latest
+-p 3333:3333 \
+--mount type=bind,source=/home/yatekii/repos/probe-rs/perf/data,target=/app/data \
+perfbot:latest

@@ -1,3 +1,4 @@
+mod config;
 pub mod db;
 mod matrix;
 
@@ -8,12 +9,14 @@ use std::{
 };
 
 use askama::Template;
+use config::Config;
 use diesel::{ExpressionMethods, QueryDsl, QueryResult, RunQueryDsl};
 use diesel_migrations::embed_migrations;
+use figment::map;
 use octocrab::Octocrab;
 use openssl::hash::MessageDigest;
 use perfbot_common::{schema::logs, Log, NewLog};
-use rocket::{self, get, post, routes, Shutdown};
+use rocket::{self, get, post, routes, Shutdown, State};
 use rocket_contrib::{
     database, json::Json, serve::StaticFiles, templates::Template as RocketTemplate,
 };
@@ -197,14 +200,33 @@ struct PerfTemplate {
 #[template(path = "commands/help.html")]
 struct HelpTemplate {}
 
-async fn matrix(shutdown: Arc<Mutex<bool>>) {
-    matrix::login_and_sync("https://matrix.org", "perfbot", "k@Jr1ZrlhLKi", shutdown)
-        .await
-        .unwrap()
+async fn matrix(
+    username: &str,
+    password: &str,
+    gh_key: Vec<u8>,
+    database_path: String,
+    json_store: &str,
+    shutdown: Arc<Mutex<bool>>,
+) {
+    matrix::login_and_sync(
+        "https://matrix.org",
+        username,
+        password,
+        gh_key,
+        database_path,
+        json_store,
+        shutdown,
+    )
+    .await
+    .unwrap()
 }
 
 fn main() {
-    migrate();
+    let config = config::get_config();
+
+    let gh_key = std::fs::read(config.github_key_path.clone()).unwrap();
+
+    migrate(&config.database_path);
 
     let rocket_shutdown = Arc::new(Mutex::new(None));
     let rocket_shutdown_clone = rocket_shutdown.clone();
@@ -220,12 +242,21 @@ fn main() {
     .expect("Error setting Ctrl-C handler");
 
     let mut rt = Runtime::new().unwrap();
-    rt.spawn(async { rocket(rocket_shutdown).await });
-    rt.block_on(matrix(matrix_shutdown));
+    let gh_key_clone = gh_key.clone();
+    let cloned_config = config.clone();
+    rt.spawn(async move { rocket(&cloned_config, gh_key_clone, rocket_shutdown).await });
+    rt.block_on(matrix(
+        &config.matrix_user,
+        &config.matrix_password,
+        gh_key,
+        config.database_path.clone(),
+        &config.matrix_json_store,
+        matrix_shutdown,
+    ));
 }
 
-fn migrate() {
-    let connection = db::establish_connection();
+fn migrate(database_path: &str) {
+    let connection = db::establish_connection(database_path);
 
     // This will run the necessary migrations.
     embedded_migrations::run(&connection).unwrap();
@@ -235,12 +266,25 @@ fn migrate() {
     embedded_migrations::run_with_output(&connection, &mut std::io::stdout()).unwrap();
 }
 
-async fn rocket(handle: Arc<Mutex<Option<Shutdown>>>) -> Result<(), rocket::error::Error> {
-    let rocket = rocket::ignite()
-        .mount("/", routes![index, list, add, chips, probes, setups])
-        .attach(Database::fairing())
-        .attach(RocketTemplate::fairing())
-        .mount("/static", StaticFiles::from("./static"));
+async fn rocket(
+    config: &Config,
+    gh_key: Vec<u8>,
+    handle: Arc<Mutex<Option<Shutdown>>>,
+) -> Result<(), rocket::error::Error> {
+    let rocket = rocket::custom(
+        rocket::Config::figment()
+            .merge(("address", &config.address))
+            .merge(("port", config.port))
+            .merge((
+                "databases",
+                map!["database" => map!["url" => &config.database_path]],
+            )),
+    )
+    .mount("/", routes![index, list, add, chips, probes, setups])
+    .attach(Database::fairing())
+    .attach(RocketTemplate::fairing())
+    .manage(GhKey { key: gh_key })
+    .mount("/static", StaticFiles::from("./static"));
     *handle.lock().unwrap() = Some(rocket.shutdown());
 
     rocket.launch().await
@@ -267,9 +311,14 @@ impl From<QueryResult<Log>> for AddResponse {
     }
 }
 
+struct GhKey {
+    key: Vec<u8>,
+}
+
 #[post("/add?<pr>", data = "<data>")]
-async fn add(
+async fn add<'a>(
     db: Database,
+    gh_key: State<'a, GhKey>,
     pr: Option<String>,
     data: Json<NewLog>,
 ) -> Result<Json<AddResponse>, Json<AddResponse>> {
@@ -297,12 +346,14 @@ async fn add(
 
     if let Some(pr) = pr {
         if let Ok(pr) = pr.parse::<u64>() {
-            let _comment = create_gh_comment(pr, &log).await.map_err(|e| {
-                Json(AddResponse {
-                    error: Some(format!("{:?}", e)),
-                    log: None,
-                })
-            })?;
+            let _comment = create_gh_comment(&gh_key.key, pr, &log)
+                .await
+                .map_err(|e| {
+                    Json(AddResponse {
+                        error: Some(format!("{:?}", e)),
+                        log: None,
+                    })
+                })?;
         }
     }
 
@@ -318,13 +369,11 @@ struct Claims {
     iss: u64,
 }
 
-pub async fn renew_token() -> octocrab::Result<Arc<Octocrab>> {
-    let key = include_bytes!("../probe-rs-perfbot.2020-12-25.private-key.pem");
-
+pub async fn renew_token(private_key: &[u8]) -> octocrab::Result<Arc<Octocrab>> {
     use jwt::{algorithm::openssl::PKeyWithDigest, SignWithKey};
     use std::time::{SystemTime, UNIX_EPOCH};
     let key = PKeyWithDigest {
-        key: openssl::pkey::PKey::private_key_from_pem(key).unwrap(),
+        key: openssl::pkey::PKey::private_key_from_pem(private_key).unwrap(),
         digest: MessageDigest::sha256(),
     };
 
@@ -355,6 +404,7 @@ pub async fn renew_token() -> octocrab::Result<Arc<Octocrab>> {
 }
 
 async fn create_gh_comment(
+    private_key: &[u8],
     pr: u64,
     log: &Log,
 ) -> octocrab::Result<octocrab::models::issues::Comment> {
@@ -371,7 +421,7 @@ Write: {}
         log.commit_hash, log.probe, log.chip, log.kind, log.read_speed, log.write_speed
     );
 
-    renew_token().await?;
+    renew_token(private_key).await?;
 
     octocrab::instance()
         .issues(GH_ORG, GH_REPO)
@@ -379,8 +429,8 @@ Write: {}
         .await
 }
 
-async fn get_pr_commits() -> octocrab::Result<HashMap<u64, Vec<String>>> {
-    renew_token().await?;
+async fn get_pr_commits(private_key: &[u8]) -> octocrab::Result<HashMap<u64, Vec<String>>> {
+    renew_token(private_key).await?;
 
     let prs = octocrab::instance()
         .pulls(GH_ORG, GH_REPO)

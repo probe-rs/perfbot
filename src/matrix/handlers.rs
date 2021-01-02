@@ -29,11 +29,16 @@ pub async fn help(client: Client, room: Arc<RwLock<Room>>) -> Result<Response, E
         .await
 }
 
-pub async fn perf(client: Client, room: Arc<RwLock<Room>>) -> Result<Response, Error> {
+pub async fn perf(
+    private_key: &[u8],
+    database_path: &str,
+    client: Client,
+    room: Arc<RwLock<Room>>,
+) -> Result<Response, Error> {
     // TODO:
     //
     // 1. Get open PRs.
-    let prs = get_pr_commits().await.unwrap();
+    let prs = get_pr_commits(private_key).await.unwrap();
     // 2. Get perf benchmarks for last commit of open PRs.
     let prs = prs
         .iter()
@@ -44,7 +49,7 @@ pub async fn perf(client: Client, room: Arc<RwLock<Room>>) -> Result<Response, E
                     sql::<Text>(&format!("'{}'", commits.last().unwrap()))
                         .like(logs::commit_hash.concat("%")),
                 )
-                .load::<Log>(&crate::db::establish_connection())
+                .load::<Log>(&crate::db::establish_connection(database_path))
                 .unwrap()
                 .len(),
         })
