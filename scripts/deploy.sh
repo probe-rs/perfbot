@@ -1,5 +1,3 @@
-ssh nebuchadnezar 'cd /home && git clone https://github.com/probe-rs/perfbot'
-ssh nebuchadnezar 'cd /home/perfbot && git pull'
-ssh nebuchadnezar 'killall perfbot'
-# ssh nebuchadnezar 'source $HOME/.cargo/env && cd /home/perfbot && nohup cargo run --release > /dev/null 2>&1 &'
-ssh nebuchadnezar 'source $HOME/.cargo/env && cd /home/perfbot && cargo run --release'
+ssh nebuchadnezar 'docker stop perfbot'
+docker save perfbot | bzip2 | ssh nebuchadnezar 'bunzip2 | docker load'
+ssh nebuchadnezar 'docker run --rm -d -p 3333:3333 --mount type=bind,source=/home/perfbot,target=/app/data --name perfbot perfbot:latest'
