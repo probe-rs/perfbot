@@ -95,6 +95,7 @@ function createPlot(plot, dom) {
                         showLine: false,
                         fill: false,
                         pointRadius: 0,
+                        pointHoverRadius: 0,
                         yAxisID: 'y-axis-2',
                         data: result.logs.map(v => v.read_speed / result.logs[0].read_speed * 100 - 100),
                     },
@@ -104,6 +105,7 @@ function createPlot(plot, dom) {
                         showLine: false,
                         fill: false,
                         pointRadius: 0,
+                        pointHoverRadius: 0,
                         yAxisID: 'y-axis-2',
                         data: result.logs.map(v => v.write_speed / result.logs[0].write_speed * 100 - 100),
                     },
@@ -113,6 +115,7 @@ function createPlot(plot, dom) {
                         showLine: false,
                         fill: false,
                         pointRadius: 0,
+                        pointHoverRadius: 0,
                         yAxisID: 'y-axis-2',
                         data: result.logs.map((v, i) => v.read_speed / result.logs[Math.max(i - 1, 0)].read_speed * 100 - 100),
                     },
@@ -122,6 +125,7 @@ function createPlot(plot, dom) {
                         showLine: false,
                         fill: false,
                         pointRadius: 0,
+                        pointHoverRadius: 0,
                         yAxisID: 'y-axis-2',
                         data: result.logs.map((v, i) => v.write_speed / result.logs[Math.max(i - 1, 0)].write_speed * 100 - 100),
                     },
@@ -131,6 +135,11 @@ function createPlot(plot, dom) {
                 title: {
                     text: plot.params.probe + ': ' + plot.params.chip,
                     display: true,
+                },
+                legend: {
+                    labels: {
+                        filter: (item, chart) => item.datasetIndex < 2
+                    }
                 },
                 scales: {
                     yAxes: [{
@@ -160,9 +169,6 @@ function createPlot(plot, dom) {
                                 return prefix + ': ' + formatBytes(tooltipItem.value)
                             }
                         },
-                        afterBody: points => {
-                            return '<p>Test</p>'
-                        }
                     }
                 }
             }
