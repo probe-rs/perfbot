@@ -1,5 +1,3 @@
-import uPlot from '/static/uPlot.esm.js';
-
 export function main() {
     let plots = [];
 
@@ -20,22 +18,24 @@ export function main() {
             view(vnode) {
                 return m('.container', [
                     m('row', m('.col', m('h2.text-center.m-4', 'probe-rs performance & regression tracking'))),
-                    m('.row', plots.map((p, i) => m('.col-6.plot.mt-5', {
+                    m('.row', plots.map((p, i) => m('.col-6.plot.mt-5', m('canvas', {
                         oninit(vnode) {
                             vnode.state.plot = undefined;
                             vnode.state.resize = function () { };
                         },
                         oncreate(vnode) {
+                            vnode.state.dom = vnode.dom;
                             createPlot(plots[i], vnode.dom).then(plot => {
                                 vnode.state.plot = plot;
 
                                 vnode.state.resize = function () {
-                                    if (plot) {
-                                        plot.setSize({
-                                            width: vnode.dom.clientWidth,
-                                            height: vnode.dom.clientWidth / 1.41,
-                                        })
-                                    }
+                                    // if (plot) {
+                                    //     plot.setSize({
+                                    //         width: vnode.dom.parent.clientWidth,
+                                    //         height: vnode.dom.parent.clientWidth / 1.41,
+                                    //     })
+                                    // }
+                                    m.redraw()
                                 }
 
                                 window.addEventListener('resize', vnode.state.resize)
@@ -43,9 +43,10 @@ export function main() {
                         },
                         onremove(vnode) {
                             window.removeEventListener('resize', vnode.state.resize)
-                        }
-                    }))
-                    )
+                        },
+                        // width: vnode.state.dom ? vnode.state.dom.parent.clientWidth : 0,
+                        // height: vnode.state.dom ? vnode.state.dom.parent.clientWidth / 1.41 : 0
+                    }))))
                 ])
             }
         })
@@ -71,84 +72,103 @@ function createPlot(plot, dom) {
         url: '/list',
         params: plot.params
     }).then(function (result) {
-        let data = [
-            result.logs.map(
-                (v, i) => i),
-            result.logs.map(v => v.read_speed),
-            result.logs.map(v => v.write_speed),
-            result.logs.map(v => v.read_speed / result.logs[0].read_speed * 100 - 100),
-            result.logs.map(v => v.write_speed / result.logs[0].write_speed * 100 - 100),
-            result.logs.map((v, i) => v.read_speed / result.logs[Math.max(i - 1, 0)].read_speed * 100 - 100),
-            result.logs.map((v, i) => v.write_speed / result.logs[Math.max(i - 1, 0)].write_speed * 100 - 100)
-        ];
-        const opts = {
-            width: dom.clientWidth,
-            height: dom.clientWidth / 1.41,
-            title: plot.params.probe + ': ' + plot.params.chip,
-            axes: [
-                {
-                    values: (self, vals) => vals.map(i => result.logs[i].commit_hash),
-                    space: 100,
-                    rotate: -90,
-                    size: 100,
-                }, {
-                    values: (self, vals) => vals.map(b => formatBytes(b)),
-                    scale: 'b',
-                    size: 70,
-                }, {
-                    values: (self, vals) => vals.map(b => b.toFixed(2) + '%'),
-                    side: 1,
-                    scale: '%',
-                    size: 70,
-                }
-            ],
-            scales: {
-                x: {
-                    date: false,
-                    distr: 2,
-                }
+        let config = {
+            type: 'line',
+            data: {
+                labels: result.logs.map(v => v.commit_hash),
+                datasets: [
+                    {
+                        label: 'Read',
+                        borderColor: 'rgb(255, 99, 132)',
+                        fill: false,
+                        data: result.logs.map(v => v.read_speed),
+                    },
+                    {
+                        label: 'Write',
+                        borderColor: 'rgb(54, 162, 235)',
+                        fill: false,
+                        data: result.logs.map(v => v.write_speed),
+                    },
+                    {
+                        label: 'abs ΔRead',
+                        borderColor: 'rgb(54, 162, 235)',
+                        showLine: false,
+                        fill: false,
+                        pointRadius: 0,
+                        yAxisID: 'y-axis-2',
+                        data: result.logs.map(v => v.read_speed / result.logs[0].read_speed * 100 - 100),
+                    },
+                    {
+                        label: 'abs ΔWrite',
+                        borderColor: 'rgb(54, 162, 235)',
+                        showLine: false,
+                        fill: false,
+                        pointRadius: 0,
+                        yAxisID: 'y-axis-2',
+                        data: result.logs.map(v => v.write_speed / result.logs[0].write_speed * 100 - 100),
+                    },
+                    {
+                        label: 'ΔRead',
+                        borderColor: 'rgb(54, 162, 235)',
+                        showLine: false,
+                        fill: false,
+                        pointRadius: 0,
+                        yAxisID: 'y-axis-2',
+                        data: result.logs.map((v, i) => v.read_speed / result.logs[Math.max(i - 1, 0)].read_speed * 100 - 100),
+                    },
+                    {
+                        label: 'ΔWrite',
+                        borderColor: 'rgb(54, 162, 235)',
+                        showLine: false,
+                        fill: false,
+                        pointRadius: 0,
+                        yAxisID: 'y-axis-2',
+                        data: result.logs.map((v, i) => v.write_speed / result.logs[Math.max(i - 1, 0)].write_speed * 100 - 100),
+                    },
+                ]
             },
-            series: [
-                {
-                    label: 'commit',
-                    value: (self, i) => result.logs[i].commit_hash
-                }, {
-                    stroke: 'orange',
-                    label: 'read',
-                    value: (self, b) => formatBytes(b),
-                    scale: 'b',
-                }, {
-                    stroke: 'red',
-                    label: 'write',
-                    value: (self, b) => formatBytes(b),
-                    scale: 'b',
-                }, {
-                    stroke: 'orange',
-                    dash: [10, 5],
-                    label: 'abs Δread',
-                    value: (self, b) => b.toFixed(2) + '%',
-                    scale: '%',
-                }, {
-                    stroke: 'red',
-                    dash: [10, 5],
-                    label: 'abs Δwrite',
-                    value: (self, b) => b.toFixed(2) + '%',
-                    scale: '%',
-                }, {
-                    stroke: 'orange',
-                    dash: [5, 10],
-                    label: 'Δread',
-                    value: (self, b) => b.toFixed(2) + '%',
-                    scale: '%',
-                }, {
-                    stroke: 'red',
-                    dash: [5, 10],
-                    label: 'Δwrite',
-                    value: (self, b) => b.toFixed(2) + '%',
-                    scale: '%',
+            options: {
+                title: {
+                    text: plot.params.probe + ': ' + plot.params.chip,
+                    display: true,
+                },
+                scales: {
+                    yAxes: [{
+                        ticks: {
+                            // Include a dollar sign in the ticks
+                            callback: (value, index, values) => formatBytes(value)
+                        }
+                    }, {
+                        type: 'linear',
+                        display: false,
+                        position: 'right',
+                        id: 'y-axis-2',
+                        gridLines: {
+                            drawOnChartArea: false, // only want the grid lines for one axis to show up
+                        },
+                    }]
+                },
+                tooltips: {
+                    position: 'nearest',
+                    mode: 'index',
+                    callbacks: {
+                        label: (tooltipItem, data) => {
+                            let prefix = config.data.datasets[tooltipItem.datasetIndex].label;
+                            if (tooltipItem.datasetIndex > 1) {
+                                return prefix + ': ' + parseFloat(tooltipItem.value).toFixed(2) + '%'
+                            } else {
+                                return prefix + ': ' + formatBytes(tooltipItem.value)
+                            }
+                        },
+                        afterBody: points => {
+                            return '<p>Test</p>'
+                        }
+                    }
                 }
-            ],
-        };
-        return new uPlot(opts, data, dom);
+            }
+        }
+
+        var ctx = dom.getContext('2d');
+        return new Chart(ctx, config);
     });
 }
