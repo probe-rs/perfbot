@@ -4,8 +4,8 @@ extern crate diesel;
 #[macro_use]
 extern crate diesel_migrations;
 
+pub mod db;
 mod matrix;
-mod schema;
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -22,17 +22,13 @@ use diesel::{
 };
 use diesel_migrations::embed_migrations;
 use dotenv::dotenv;
-use matrix_bot_api::{
-    handlers::{HandleResult, StatelessHandler},
-    MatrixBot, MessageType,
-};
 use octocrab::Octocrab;
 use openssl::hash::MessageDigest;
-use rocket::{self, get, post, routes};
+use perfbot_common::{schema::logs, Log, NewLog};
+use rocket::{self, get, post, routes, Shutdown};
 use rocket_contrib::{
     database, json::Json, serve::StaticFiles, templates::Template as RocketTemplate,
 };
-use schema::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::runtime::{Handle, Runtime};
@@ -41,10 +37,6 @@ const GH_ORG: &str = "probe-rs";
 const GH_REPO: &str = "probe-rs";
 const APP_ID: u64 = 93972;
 const INSTALLATION_ID: u64 = 13730372;
-
-lazy_static::lazy_static! {
-    static ref RUNTIME: Mutex<Option<Handle>> = Mutex::new(None);
-}
 
 embed_migrations!();
 
@@ -118,14 +110,6 @@ async fn list(
     )
 }
 
-pub fn establish_connection() -> SqliteConnection {
-    dotenv().ok();
-
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    SqliteConnection::establish(&database_url)
-        .expect(&format!("Error connecting to {}", database_url))
-}
-
 struct Pr {
     number: u64,
     benchmarks: usize,
@@ -141,78 +125,35 @@ struct PerfTemplate {
 #[template(path = "commands/help.html")]
 struct HelpTemplate {}
 
-pub fn matrix_bot() {
-    let mut handler = StatelessHandler::new();
-
-    handler.register_handle("perf", |bot, message, tail| {
-        // TODO:
-        //
-        // 1. Get open PRs.
-        let mut handle = { RUNTIME.lock().unwrap().clone() };
-        let prs = futures::executor::block_on(
-            handle
-                .as_mut()
-                .unwrap()
-                .spawn(async { get_pr_commits().await }),
-        )
+async fn matrix(shutdown: Arc<Mutex<bool>>) {
+    matrix::login_and_sync("https://matrix.org", "perfbot", "k@Jr1ZrlhLKi", shutdown)
+        .await
         .unwrap()
-        .unwrap();
-        // 2. Get perf benchmarks for last commit of open PRs.
-        let prs = prs
-            .iter()
-            .map(|(pr, commits)| Pr {
-                number: *pr,
-                benchmarks: logs::table
-                    .filter(
-                        sql::<Text>(&format!("'{}'", commits.last().unwrap()))
-                            .like(logs::commit_hash.concat("%")),
-                    )
-                    .load::<Log>(&establish_connection())
-                    .unwrap()
-                    .len(),
-            })
-            .collect::<Vec<Pr>>();
-        // 3. Count number of benchmarks per PR.
-        // 4. Print to commandline.
-
-        bot.send_html_message(
-            &"",
-            &PerfTemplate { prs }.render().unwrap(),
-            &message.room,
-            MessageType::TextMessage,
-        );
-        HandleResult::StopHandling
-    });
-
-    handler.register_handle("help", |bot, message, tail| {
-        bot.send_html_message(
-            "",
-            &HelpTemplate {}.render().unwrap(),
-            &message.room,
-            MessageType::TextMessage,
-        );
-        HandleResult::StopHandling
-    });
-
-    let bot = MatrixBot::new(handler);
-    std::thread::spawn(|| bot.run("perfbot", "k@Jr1ZrlhLKi", "https://matrix.org"));
 }
 
 fn main() {
     migrate();
 
+    let rocket_shutdown = Arc::new(Mutex::new(None));
+    let rocket_shutdown_clone = rocket_shutdown.clone();
+    let matrix_shutdown = Arc::new(Mutex::new(false));
+    let matrix_shutdown_clone = matrix_shutdown.clone();
+    ctrlc::set_handler(move || {
+        println!("received Ctrl+C!");
+        if let Some::<Shutdown>(shdn) = rocket_shutdown_clone.lock().unwrap().clone() {
+            shdn.shutdown();
+        }
+        *matrix_shutdown_clone.lock().unwrap() = true;
+    })
+    .expect("Error setting Ctrl-C handler");
+
     let mut rt = Runtime::new().unwrap();
-    {
-        let mut handle = RUNTIME.lock().unwrap();
-        *handle = Some(rt.handle().clone());
-    }
-    rt.spawn(rocket());
-    let bot = matrix_bot();
-    rt.block_on(std::future::pending::<()>());
+    rt.spawn(async { rocket(rocket_shutdown).await });
+    rt.block_on(matrix(matrix_shutdown));
 }
 
 fn migrate() {
-    let connection = establish_connection();
+    let connection = db::establish_connection();
 
     // This will run the necessary migrations.
     embedded_migrations::run(&connection).unwrap();
@@ -222,14 +163,15 @@ fn migrate() {
     embedded_migrations::run_with_output(&connection, &mut std::io::stdout()).unwrap();
 }
 
-async fn rocket() -> Result<(), rocket::error::Error> {
-    rocket::ignite()
+async fn rocket(handle: Arc<Mutex<Option<Shutdown>>>) -> Result<(), rocket::error::Error> {
+    let rocket = rocket::ignite()
         .mount("/", routes![index, list, add])
         .attach(Database::fairing())
         .attach(RocketTemplate::fairing())
-        .mount("/static", StaticFiles::from("./static"))
-        .launch()
-        .await
+        .mount("/static", StaticFiles::from("./static"));
+    *handle.lock().unwrap() = Some(rocket.shutdown());
+
+    rocket.launch().await
 }
 
 #[derive(Serialize, Deserialize)]
@@ -393,58 +335,6 @@ async fn get_pr_commits() -> octocrab::Result<HashMap<u64, Vec<String>>> {
     }
 
     Ok(result)
-}
-
-#[derive(Serialize, Deserialize, Queryable)]
-pub struct Log {
-    pub id: i32,
-    pub probe: String,
-    pub chip: String,
-    pub os: String,
-    pub protocol: String,
-    pub protocol_speed: i32,
-    pub commit_hash: String,
-    #[serde(with = "timestamp")]
-    pub timestamp: NaiveDateTime,
-    pub kind: String,
-    pub read_speed: i32,
-    pub write_speed: i32,
-}
-
-mod timestamp {
-    use chrono::NaiveDateTime;
-    use serde::{self, Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S>(date: &NaiveDateTime, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_i64(date.timestamp())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<NaiveDateTime, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = i64::deserialize(deserializer)?;
-        Ok(NaiveDateTime::from_timestamp(s, 0))
-    }
-}
-
-#[derive(Insertable, Serialize, Deserialize)]
-#[table_name = "logs"]
-pub struct NewLog {
-    pub probe: String,
-    pub chip: String,
-    pub os: String,
-    pub protocol: String,
-    pub protocol_speed: i32,
-    pub commit_hash: String,
-    #[serde(with = "timestamp")]
-    pub timestamp: NaiveDateTime,
-    pub kind: String,
-    pub read_speed: i32,
-    pub write_speed: i32,
 }
 
 #[database("database")]
