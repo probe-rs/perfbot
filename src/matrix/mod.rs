@@ -3,61 +3,42 @@ mod templates;
 
 use std::sync::{Arc, Mutex};
 
-use async_trait::async_trait;
 use matrix_sdk::{
     self,
-    events::{
+    room::Room,
+    ruma::events::{
         room::message::{MessageEventContent, MessageType, TextMessageEventContent},
         SyncMessageEvent,
     },
-    room::Room,
-    Client, ClientConfig, EventHandler, LoopCtrl, SyncSettings,
+    Client, ClientConfig, LoopCtrl, SyncSettings,
 };
 use url::Url;
 
-struct CommandBot {
-    /// This clone of the `Client` will send requests to the server,
-    /// while the other keeps us in sync with the server using `sync`.
-    client: Client,
-    gh_key: Vec<u8>,
-    database_path: String,
-}
+async fn on_room_message(
+    event: SyncMessageEvent<MessageEventContent>,
+    room: Room,
+    gh_key: Arc<Vec<u8>>,
+    database_path: Arc<String>,
+) {
+    if let Room::Joined(room) = room {
+        let msg_body = if let SyncMessageEvent {
+            content:
+                MessageEventContent {
+                    msgtype: MessageType::Text(TextMessageEventContent { body: msg_body, .. }),
+                    ..
+                },
+            ..
+        } = event
+        {
+            msg_body.clone()
+        } else {
+            String::new()
+        };
 
-impl CommandBot {
-    pub fn new(client: Client, gh_key: Vec<u8>, database_path: String) -> Self {
-        Self {
-            client,
-            gh_key,
-            database_path,
-        }
-    }
-}
-
-#[async_trait]
-impl EventHandler for CommandBot {
-    async fn on_room_message(&self, room: Room, event: &SyncMessageEvent<MessageEventContent>) {
-        if let Room::Joined(room) = room {
-            let msg_body = if let SyncMessageEvent {
-                content:
-                    MessageEventContent {
-                        msgtype: MessageType::Text(TextMessageEventContent { body: msg_body, .. }),
-                        ..
-                    },
-                ..
-            } = event
-            {
-                msg_body.clone()
-            } else {
-                String::new()
-            };
-
-            if msg_body.starts_with("!help") {
-                handlers::help(self.client.clone(), room).await.unwrap();
-            } else if msg_body.starts_with("!perf") {
-                handlers::perf(&self.gh_key, &self.database_path, self.client.clone(), room)
-                    .await
-                    .unwrap();
-            }
+        if msg_body.starts_with("!help") {
+            handlers::help(room).await.unwrap();
+        } else if msg_body.starts_with("!perf") {
+            handlers::perf(gh_key, database_path, room).await.unwrap();
         }
     }
 }
@@ -86,14 +67,16 @@ pub async fn login_and_sync(
     // If the `StateStore` finds saved state in the location given the initial sync will
     // be skipped in favor of loading state from the store
     client.sync_once(SyncSettings::default()).await.unwrap();
+
+    let gh_key = Arc::new(gh_key);
+    let database_path = Arc::new(database_path);
+
     // add our CommandBot to be notified of incoming messages, we do this after the initial
     // sync to avoid responding to messages before the bot was running.
     client
-        .set_event_handler(Box::new(CommandBot::new(
-            client.clone(),
-            gh_key,
-            database_path,
-        )))
+        .register_event_handler(move |ev, room| {
+            on_room_message(ev, room, gh_key.clone(), database_path.clone())
+        })
         .await;
 
     // since we called `sync_once` before we entered our sync loop we must pass
