@@ -1,12 +1,10 @@
-use std::sync::Arc;
-
 use askama::Template;
 use diesel::{dsl::sql, sql_types::Text, QueryDsl, RunQueryDsl, TextExpressionMethods};
 use matrix_sdk::{
     api::r0::message::send_message_event::Response,
     events::{room::message::MessageEventContent, AnyMessageEventContent},
-    locks::RwLock,
-    Client, Error, Room,
+    room::Joined,
+    Client, Error,
 };
 use perfbot_common::{schema::logs, Log};
 
@@ -14,13 +12,15 @@ use crate::get_pr_commits;
 
 use super::templates::{HelpTemplate, PerfTemplate};
 
-pub async fn help(client: Client, room: Arc<RwLock<Room>>) -> Result<Response, Error> {
+pub async fn help(client: Client, room: Joined) -> Result<Response, Error> {
     let content = AnyMessageEventContent::RoomMessage(MessageEventContent::text_html(
         "",
         HelpTemplate {}.render().unwrap(),
     ));
+
+    // TODO: Not sure if necessary anymore, lock seems no longer present on newer matrix-sdk version
     // we clone here to hold the lock for as little time as possible.
-    let room_id = room.read().await.room_id.clone();
+    let room_id = room.room_id().clone();
 
     client
         // send our message to the room we found the "!party" command in
@@ -33,7 +33,7 @@ pub async fn perf(
     private_key: &[u8],
     database_path: &str,
     client: Client,
-    room: Arc<RwLock<Room>>,
+    room: Joined,
 ) -> Result<Response, Error> {
     // TODO:
     //
@@ -61,8 +61,10 @@ pub async fn perf(
         "",
         PerfTemplate { prs }.render().unwrap(),
     ));
+
+    // TODO: Not sure if necessary anymore, lock seems no longer present on newer matrix-sdk version
     // we clone here to hold the lock for as little time as possible.
-    let room_id = room.read().await.room_id.clone();
+    let room_id = room.room_id().clone();
 
     client
         // send our message to the room we found the "!party" command in
