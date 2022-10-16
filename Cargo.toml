@@ -30,7 +30,7 @@ migrations_macros = { git = "https://github.com/diesel-rs/diesel", features = ["
 tokio = { version = "0.2.24", features = ["full"] }
 futures = "0.3.8"
 askama = "0.10.5"
-matrix-sdk = { git = "https://github.com/matrix-org/matrix-rust-sdk" }
+matrix-sdk = "0.2.0"
 url = "*"
 dirs = "*"
 async-trait = "*"
