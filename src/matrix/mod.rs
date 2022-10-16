@@ -7,10 +7,11 @@ use async_trait::async_trait;
 use matrix_sdk::{
     self,
     events::{
-        room::message::{MessageEventContent, TextMessageEventContent},
+        room::message::{MessageEventContent, MessageType, TextMessageEventContent},
         SyncMessageEvent,
     },
-    Client, ClientConfig, EventEmitter, JsonStore, LoopCtrl, SyncRoom, SyncSettings,
+    room::Room,
+    Client, ClientConfig, EventHandler, LoopCtrl, SyncSettings,
 };
 use url::Url;
 
@@ -33,11 +34,15 @@ impl CommandBot {
 }
 
 #[async_trait]
-impl EventEmitter for CommandBot {
-    async fn on_room_message(&self, room: SyncRoom, event: &SyncMessageEvent<MessageEventContent>) {
-        if let SyncRoom::Joined(room) = room {
+impl EventHandler for CommandBot {
+    async fn on_room_message(&self, room: Room, event: &SyncMessageEvent<MessageEventContent>) {
+        if let Room::Joined(room) = room {
             let msg_body = if let SyncMessageEvent {
-                content: MessageEventContent::Text(TextMessageEventContent { body: msg_body, .. }),
+                content:
+                    MessageEventContent {
+                        msgtype: MessageType::Text(TextMessageEventContent { body: msg_body, .. }),
+                        ..
+                    },
                 ..
             } = event
             {
@@ -66,11 +71,10 @@ pub async fn login_and_sync(
     json_store: &str,
     shutdown: Arc<Mutex<bool>>,
 ) -> Result<(), matrix_sdk::Error> {
-    let store = JsonStore::open(json_store)?;
-    let client_config = ClientConfig::new().state_store(Box::new(store));
+    let client_config = ClientConfig::new().store_path(json_store);
 
     let homeserver_url = Url::parse(&homeserver_url).expect("Couldn't parse the homeserver URL");
-    let mut client = Client::new_with_config(homeserver_url, client_config).unwrap();
+    let client = Client::new_with_config(homeserver_url, client_config).unwrap();
 
     client
         .login(&username, &password, None, Some("perfbot"))
@@ -85,7 +89,7 @@ pub async fn login_and_sync(
     // add our CommandBot to be notified of incoming messages, we do this after the initial
     // sync to avoid responding to messages before the bot was running.
     client
-        .add_event_emitter(Box::new(CommandBot::new(
+        .set_event_handler(Box::new(CommandBot::new(
             client.clone(),
             gh_key,
             database_path,

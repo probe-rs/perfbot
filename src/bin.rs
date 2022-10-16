@@ -443,8 +443,9 @@ async fn get_pr_commits(private_key: &[u8]) -> octocrab::Result<HashMap<u64, Vec
 
     for pr in prs {
         let commits: Value = octocrab::instance()
-            .get::<_, _, Value>(pr.commits_url.clone(), None)
+            .get::<_, _, Value>(pr.commits_url.unwrap().clone(), None)
             .await?;
+
         result.insert(
             pr.number,
             commits
