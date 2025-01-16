@@ -1,0 +1,63 @@
+[package]
+name = "perfbot"
+version = "0.1.0"
+authors = ["Noah Hüsser <noah@huesser.dev>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = { version = "0.6.0", features = ["router", "fullstack"] }
+serde = { version = "1.0.217", features = ["derive"] }
+surrealdb = "2.1.4"
+chrono = "0.4"
+anyhow = "1"
+itertools = "0.14"
+
+tokio = { version = "1.43.0", features = [
+    "macros",
+    "rt-multi-thread",
+], optional = true }
+axum = { version = "0.7", optional = true }
+axum_session = { version = "0.15.0", optional = true }
+axum_session_auth = { version = "0.15.0", optional = true }
+dioxus-cli-config = { version = "0.6.1", optional = true }
+dioxus-web = { version = "0.6.1", optional = true }
+dioxus-free-icons = { version = "0.9", features = [
+    "font-awesome-brands",
+    "font-awesome-regular",
+] }
+octocrab = { version = "0.42.1", optional = true }
+jsonwebtoken = { version = "9", optional = true }
+dotenvy = { version = "0.15.0", optional = true }
+axum-github-hooks = { version = "0.1", optional = true }
+
+[features]
+default = []
+web = ["dioxus/web", "dep:dioxus-web"]
+desktop = ["dioxus/desktop"]
+mobile = ["dioxus/mobile"]
+server = [
+    "dioxus/server",
+    "dep:tokio",
+    "dep:axum",
+    "dep:dioxus-cli-config",
+    "dep:axum_session",
+    "dep:axum_session_auth",
+    "dep:octocrab",
+    "dep:jsonwebtoken",
+    "dep:dotenvy",
+    "dep:axum-github-hooks",
+]
+
+[profile]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
