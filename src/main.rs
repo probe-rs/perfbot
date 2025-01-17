@@ -18,7 +18,7 @@ use helpers::read_env_var;
 use std::sync::LazyLock;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
-use views::{home::Home, run::Run};
+use views::{home::Home, run::Run, runs::Runs};
 
 #[derive(Debug, Clone, Routable, PartialEq)]
 #[rustfmt::skip]
@@ -26,6 +26,8 @@ enum Route {
     #[layout(Navbar)]
     #[route("/")]
     Home {},
+    #[route("/runs")]
+    Runs {},
     #[route("/run/:run")]
     Run { run: i64 },
     // #[route("/benchmark/:run")]
@@ -139,7 +141,6 @@ fn App() -> Element {
     // Build cool things ✌️
 
     rsx! {
-        // Global app resources
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: TAILWIND_CSS }
 

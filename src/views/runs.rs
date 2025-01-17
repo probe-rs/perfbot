@@ -4,7 +4,7 @@ use crate::DB;
 use dioxus::prelude::*;
 
 #[component]
-pub fn Home() -> Element {
+pub fn Runs() -> Element {
     let runs = use_server_future(get_runs)?;
     let runs = runs.value();
     let runs = runs.read();
@@ -16,10 +16,11 @@ pub fn Home() -> Element {
     };
 
     rsx! {
-        div { class: "p-5",
+        div {
+            h1 { class: "m-2 text-4xl text-white", "Runs" }
             table { class: "w-full border-collapse",
                 {runs.iter().enumerate().map(|(i, run)| rsx! {
-                    tr { class: "w-full border-probe-rs-green hover:bg-slate-600",
+                    tr { class: "w-full border-probe-rs-green border-solid border-[1px] hover:bg-slate-600 rounded-sm text-probe-rs-green",
                         RunListEntry { run: run.clone(), odd: i % 2 != 0 }
                     }
                 })}

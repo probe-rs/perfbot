@@ -8,10 +8,13 @@ pub fn Navbar() -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: NAVBAR_CSS }
 
-        div { id: "navbar",
-            Link { to: Route::Home {}, "Home" }
-        }
+        div { class: "bg-slate-700 p-5",
+            div { id: "navbar",
+                Link { to: Route::Home {}, "Home" }
+                Link { to: Route::Runs {}, "Runs" }
+            }
 
-        Outlet::<Route> {}
+            Outlet::<Route> {}
+        }
     }
 }
