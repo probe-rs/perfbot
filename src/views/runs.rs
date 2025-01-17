@@ -17,7 +17,7 @@ pub fn Runs() -> Element {
 
     rsx! {
         div {
-            h1 { class: "m-2 text-4xl text-white", "Runs" }
+            h1 { class: "m-y-2 text-4xl text-white", "Runs" }
             table { class: "w-full border-collapse",
                 {runs.iter().enumerate().map(|(i, run)| rsx! {
                     tr { class: "w-full border-probe-rs-green border-solid border-[1px] hover:bg-slate-600 rounded-sm text-probe-rs-green",

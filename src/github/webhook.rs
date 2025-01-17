@@ -54,7 +54,7 @@ pub async fn webhook(GithubWebhook(hook): GithubWebhook) -> Result<(), AppError>
                     let run_id = body.workflow_run["id"].as_i64().unwrap();
                     let pr = pr["number"].as_i64().unwrap();
 
-                    let benchmarks = get_benchmark_measurements(run_id).await.unwrap();
+                    let (_run, benchmarks) = get_benchmark_measurements(run_id).await.unwrap();
                     create_gh_comment(octocrab, pr, run_id, benchmarks)
                         .await
                         .unwrap();

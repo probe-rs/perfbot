@@ -1,22 +1,34 @@
 use crate::components::benchmark_list_entry::{Benchmark, BenchmarkListEntry};
+use crate::helpers::read_env_var;
 use crate::models::run::RunMappedModel;
 use crate::DB;
 use dioxus::prelude::*;
 
 #[component]
 pub fn Run(run: i64) -> Element {
-    let runs = use_server_future(move || get_benchmark_measurements(run))?;
-    let runs = runs.value();
-    let runs = runs.read();
+    let benchmarks = use_server_future(move || get_benchmark_measurements(run))?;
+    let benchmarks = benchmarks.value();
+    let benchmarks = benchmarks.read();
 
-    let benchmarks = match &*runs {
-        Some(Ok(runs)) => runs,
-        Some(Err(err)) => return rsx!("Unable to load runs: {err}"),
+    let (run, benchmarks) = match &*benchmarks {
+        Some(Ok(benchmarks)) => benchmarks,
+        Some(Err(err)) => return rsx!( "Unable to load benchmarks: {err}" ),
         None => unreachable!(),
     };
 
+    let org = read_env_var("GITHUB_ORG");
+    let repo = read_env_var("GITHUB_REPO");
+
     rsx! {
-        div { class: "p-5",
+        div {
+            h1 { class: "m-y-2 text-4xl text-white",
+                "Run for "
+                a {
+                    class: "hover:underline",
+                    href: "https://github.com/{org}/{repo}/pull/{run.pr}/commits/{run.commit}",
+                    "{run.commit}"
+                }
+            }
             table { class: "w-full border-collapse",
                 {
                     benchmarks
@@ -34,7 +46,9 @@ pub fn Run(run: i64) -> Element {
 }
 
 #[server]
-pub async fn get_benchmark_measurements(run: i64) -> Result<Vec<Benchmark>, ServerFnError> {
+pub async fn get_benchmark_measurements(
+    run: i64,
+) -> Result<(RunMappedModel, Vec<Benchmark>), ServerFnError> {
     let mut results = DB
         .query(
             r#"SELECT * FROM run
@@ -88,5 +102,6 @@ pub async fn get_benchmark_measurements(run: i64) -> Result<Vec<Benchmark>, Serv
         }
     });
 
-    Ok(benchmarks.collect())
+    let benchmarks = benchmarks.collect();
+    Ok((current_run, benchmarks))
 }
