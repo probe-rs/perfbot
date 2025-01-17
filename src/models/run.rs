@@ -2,6 +2,8 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use surrealdb::{Datetime, RecordId};
 
+use crate::helpers::read_env_var;
+
 use super::measurement::{MeasurementMappedModel, MeasurementModel};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -54,8 +56,11 @@ pub struct RunMappedParentModel {
 
 impl RunModel {
     pub fn pr_url_element(&self) -> Element {
+        let org = read_env_var("GITHUB_ORG");
+        let repo = read_env_var("GITHUB_REPO");
+
         rsx! {
-            a { href: "https://github.com/probe-rs/probe-rs/pulls/{self.pr}", "#{self.pr}" }
+            a { href: "https://github.com/{org}/{repo}/pull/{self.pr}", "#{self.pr}" }
         }
     }
 }
