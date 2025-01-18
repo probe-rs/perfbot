@@ -25,8 +25,8 @@ pub fn BenchmarkListEntry(benchmark: Benchmark, odd: bool) -> Element {
             p { "{benchmark.description}" }
         }
         td { class: "p-2 px-3 {background}",
-            "{benchmark.abs}{benchmark.unit} ("
-            span { class: color, "{benchmark.diff}{benchmark.unit}" }
+            "{benchmark.abs:.02} {benchmark.unit} ("
+            span { class: color, "{benchmark.diff:.02} {benchmark.unit}" }
             ")"
         }
         td { class: "p-2 px-3 {background}",
