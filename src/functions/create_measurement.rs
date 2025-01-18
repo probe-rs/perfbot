@@ -25,7 +25,7 @@ pub async fn create_measurement(
     let created: Option<Record> = DB
         .create("measurement")
         .content(CreateMeasurementModel {
-            run: run.run.clone(),
+            run: RecordId::from_table_key("run", run.run),
             benchmark: created.unwrap().id,
             datetime: run.datetime,
             probe: run.probe,
@@ -53,7 +53,7 @@ pub async fn create_measurement(
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMeasurement {
-    pub run: RecordId,
+    pub run: i64,
     pub datetime: Datetime,
 
     pub name: String,
