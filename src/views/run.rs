@@ -81,7 +81,8 @@ pub async fn get_benchmark_measurements(
             Benchmark {
                 name: new.benchmark.name.clone(),
                 description: new.benchmark.description.clone(),
-                abs: new.value,
+                value: new.value,
+                std: new.std,
                 diff: old.value - new.value,
                 percentage: old.value / new.value,
 
@@ -92,7 +93,8 @@ pub async fn get_benchmark_measurements(
             Benchmark {
                 name: new.benchmark.name.clone(),
                 description: new.benchmark.description.clone(),
-                abs: new.value,
+                value: new.value,
+                std: new.std,
                 diff: 0.0,
                 percentage: 0.0,
 

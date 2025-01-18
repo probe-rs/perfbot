@@ -17,6 +17,7 @@ pub struct MeasurementModel {
     pub speed_khz: usize,
 
     pub value: f64,
+    pub std: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -33,4 +34,5 @@ pub struct MeasurementMappedModel {
     pub speed_khz: usize,
 
     pub value: f64,
+    pub std: f64,
 }

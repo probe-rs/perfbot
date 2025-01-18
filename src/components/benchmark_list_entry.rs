@@ -16,6 +16,7 @@ pub fn BenchmarkListEntry(benchmark: Benchmark, odd: bool) -> Element {
 
     let status_text = benchmark.status_text();
     let percent_change = benchmark.percent_change_text();
+    let value = benchmark.value_text();
 
     let background = if !odd { "bg-gray-300" } else { "" };
 
@@ -25,7 +26,7 @@ pub fn BenchmarkListEntry(benchmark: Benchmark, odd: bool) -> Element {
             p { "{benchmark.description}" }
         }
         td { class: "p-2 px-3 {background}",
-            "{benchmark.abs:.02} {benchmark.unit} ("
+            "{value} {benchmark.unit} ("
             span { class: color, "{benchmark.diff:.02} {benchmark.unit}" }
             ")"
         }
@@ -42,7 +43,8 @@ pub fn BenchmarkListEntry(benchmark: Benchmark, odd: bool) -> Element {
 pub struct Benchmark {
     pub name: String,
     pub description: String,
-    pub abs: f64,
+    pub value: f64,
+    pub std: f64,
     pub diff: f64,
     pub percentage: f64,
     pub unit: String,
@@ -73,5 +75,9 @@ impl Benchmark {
 
     pub fn percent_change_text(&self) -> String {
         format!("{:.02} %", self.percent_change() * 100.0)
+    }
+
+    pub fn value_text(&self) -> String {
+        format!("{:.02} ± {:.02}", self.value, self.std)
     }
 }

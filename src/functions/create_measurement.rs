@@ -32,6 +32,7 @@ pub async fn create_measurement(
             chip: run.chip,
             speed_khz: run.speed_khz,
             value: run.value,
+            std: run.std,
         })
         .await?;
 
@@ -66,6 +67,7 @@ pub struct CreateMeasurement {
     pub speed_khz: usize,
 
     pub value: f64,
+    pub std: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -81,6 +83,7 @@ pub struct CreateMeasurementModel {
     pub speed_khz: usize,
 
     pub value: f64,
+    pub std: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]

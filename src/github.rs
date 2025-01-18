@@ -43,10 +43,11 @@ async fn create_gh_comment(
             let status_text = benchmark.status_text();
             let percent_change = benchmark.percent_change_text();
             let name = &benchmark.name;
-            let abs = benchmark.abs;
+            let value = benchmark.value;
+            let std = benchmark.std;
             let unit = &benchmark.unit;
             let diff = benchmark.diff;
-            format!("| {name}  | {abs}{unit} ({diff}{unit})  | {percent_change} | {status_text} |")
+            format!("| {name}  | {value}{unit} ± {std}{unit} ({diff}{unit})  | {percent_change} | {status_text} |")
         })
         .join("\n");
 
