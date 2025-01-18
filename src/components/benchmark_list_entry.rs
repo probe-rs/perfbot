@@ -68,7 +68,7 @@ impl Benchmark {
     }
 
     pub fn percent_change(&self) -> f64 {
-        self.percentage - 1.0
+        -(self.percentage - 1.0)
     }
 
     pub fn percent_change_text(&self) -> String {
